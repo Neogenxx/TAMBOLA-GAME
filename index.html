@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart & Vibrant Tambola</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🎲 Smart Tambola 🎲</h1>
+            <p>Experience the most vibrant and interactive Tambola game!</p>
+        </header>
+
+        <div class="game-controls">
+            <button class="btn btn-primary" onclick="generateTickets()">Generate Tickets</button>
+            <button class="btn btn-secondary" onclick="pickNumber()">Pick Number</button>
+            <button class="btn btn-success" onclick="resetGame()">Reset Game</button>
+        </div>
+
+        <div class="game-area">
+            <div class="tickets-container">
+                <h3 style="margin-bottom: 20px; text-align: center;">🎫 Tambola Tickets</h3>
+                <div id="tickets"></div>
+            </div>
+
+            <div class="number-picker">
+                <h3 style="margin-bottom: 20px;">🎯 Number Picker</h3>
+                <div class="current-number" id="currentNumber">
+                    Click "Pick Number"
+                </div>
+                <button class="btn btn-primary" onclick="pickNumber()" style="margin-top: 10px;">
+                    🎲 Pick Next Number
+                </button>
+                
+                <h4 style="margin: 20px 0 10px 0;">📋 Called Numbers</h4>
+                <div class="number-history" id="numberHistory"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
