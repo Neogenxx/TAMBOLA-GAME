@@ -55,9 +55,11 @@ export function GamePlay({
   }, [currentPlayer.completedRows, currentPlayer.hasFullHouse, showConfetti]);
 
   const handleCallNumber = () => {
-    const calledNumber = onCallNumber();
-    if (calledNumber && voiceEnabled) {
-      voiceAnnouncer.announceNumber(calledNumber);
+    onCallNumber();
+    // If you want to announce the number, do it inside onCallNumber or pass the number as a parameter.
+    // Example: If room.currentNumber is updated after calling onCallNumber, you can announce it here:
+    if (voiceEnabled && room.currentNumber) {
+      voiceAnnouncer.announceNumber(room.currentNumber);
     }
   };
 
