@@ -5,13 +5,15 @@ import { Users, GamepadIcon, Sparkles } from 'lucide-react';
 interface HomePageProps {
   onCreateRoom: (hostName: string) => void;
   onJoinRoom: (roomCode: string, playerName: string) => void;
+  error?: string;
 }
 
-export function HomePage({ onCreateRoom, onJoinRoom }: HomePageProps) {
+export function HomePage({ onCreateRoom, onJoinRoom, error }: HomePageProps) {
   const [mode, setMode] = useState<'home' | 'create' | 'join'>('home');
   const [hostName, setHostName] = useState('');
   const [playerName, setPlayerName] = useState('');
   const [roomCode, setRoomCode] = useState('');
+  const [joinError, setJoinError] = useState('');
 
   const handleCreateRoom = (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,8 +24,13 @@ export function HomePage({ onCreateRoom, onJoinRoom }: HomePageProps) {
 
   const handleJoinRoom = (e: React.FormEvent) => {
     e.preventDefault();
+    setJoinError('');
     if (roomCode.trim() && playerName.trim()) {
-      onJoinRoom(roomCode.trim().toUpperCase(), playerName.trim());
+      try {
+        onJoinRoom(roomCode.trim().toUpperCase(), playerName.trim());
+      } catch (err) {
+        setJoinError((err as Error).message);
+      }
     }
   };
 
@@ -152,6 +159,14 @@ export function HomePage({ onCreateRoom, onJoinRoom }: HomePageProps) {
             </div>
             
             <form onSubmit={handleJoinRoom} className="space-y-6">
+              {(joinError || error) && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                  <div className="text-red-800 text-sm font-medium">
+                    {joinError || error}
+                  </div>
+                </div>
+              )}
+              
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Room Code
