@@ -1,4 +1,4 @@
-import * as React from 'react';
+import React from 'react';
 import { motion } from 'framer-motion';
 import { Users, Copy, Play, LogOut } from 'lucide-react';
 import { GameRoom, Player } from '../types/game';
@@ -51,6 +51,9 @@ export function GameLobby({ room, currentPlayer, isHost, onStartGame, onLeaveRoo
                 <Users className="w-6 h-6 mr-2" />
                 Players ({room.players.length})
               </h2>
+              <div className="text-sm text-gray-500">
+                {room.gameStarted ? 'Game in progress' : 'Waiting for players'}
+              </div>
             </div>
             
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

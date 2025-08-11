@@ -9,6 +9,7 @@ import { GameStatus } from './types/game';
 function App() {
   const { gameState, createRoom, joinRoom, startGame, callNumber, markNumber, leaveRoom } = useGameState();
   const [gameStatus, setGameStatus] = useState<GameStatus>('lobby');
+  const [error, setError] = useState<string>('');
   const voiceAnnouncer = useRef<VoiceAnnouncer | null>(null);
 
   useEffect(() => {
@@ -26,11 +27,7 @@ function App() {
 
   useEffect(() => {
     if (gameState.currentRoom) {
-      if (gameState.currentRoom.gameStarted) {
-        setGameStatus('playing');
-      } else {
-        setGameStatus('lobby');
-      }
+      setGameStatus(gameState.currentRoom.gameStarted ? 'playing' : 'lobby');
     } else {
       setGameStatus('lobby');
     }
@@ -41,9 +38,13 @@ function App() {
   };
 
   const handleJoinRoom = (roomCode: string, playerName: string) => {
-    // In a real app, this would attempt to join via Socket.io
-    // For demo purposes, we'll create a mock room
-    joinRoom(roomCode, playerName);
+    try {
+      setError('');
+      joinRoom(roomCode, playerName);
+    } catch (err) {
+      setError((err as Error).message);
+      throw err;
+    }
   };
 
   const handleStartGame = () => {
@@ -72,6 +73,7 @@ function App() {
       <HomePage
         onCreateRoom={handleCreateRoom}
         onJoinRoom={handleJoinRoom}
+        error={error}
       />
     );
   }
