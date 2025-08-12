@@ -1,6 +1,9 @@
-import { useState, useCallback } from 'react';
+// client/src/hooks/useGameState.ts
+import { useState, useCallback, useEffect } from 'react';
+import socket from '../socket';
 import { GameRoom, Player, GameState } from '../types/game';
-import { generateTambolaTicket, checkRowCompletion, checkFullHouse } from '../utils/ticketGenerator';
+
+type JoinRequest = { requesterId: string; playerName: string; roomCode: string };
 
 export function useGameState() {
   const [gameState, setGameState] = useState<GameState>({
@@ -9,157 +12,148 @@ export function useGameState() {
     isHost: false
   });
 
+  const [pendingJoinRequests, setPendingJoinRequests] = useState<JoinRequest[]>([]);
+  const [lastError, setLastError] = useState<string | null>(null);
+
+  // Host creates room
   const createRoom = useCallback((hostName: string) => {
-    const roomCode = Math.random().toString(36).substr(2, 6).toUpperCase();
-    const hostId = Math.random().toString(36).substr(2, 9);
-    
-    const hostPlayer: Player = {
-      id: hostId,
-      name: hostName,
-      ticket: generateTambolaTicket(),
-      markedNumbers: new Set(),
-      completedRows: [false, false, false],
-      hasFirstRow: false,
-      hasSecondRow: false,
-      hasThirdRow: false,
-      hasFullHouse: false,
-      score: 0
-    };
-
-    const room: GameRoom = {
-      id: Math.random().toString(36).substr(2, 9),
-      code: roomCode,
-      hostId,
-      players: [hostPlayer],
-      currentNumber: null,
-      calledNumbers: [],
-      gameStarted: false,
-      gameEnded: false,
-      winners: {}
-    };
-
-    setGameState({
-      currentRoom: room,
-      currentPlayer: hostPlayer,
-      isHost: true
-    });
-
-    return room;
+    setLastError(null);
+    socket.emit('create-room', hostName);
   }, []);
 
+  // Player requests to join (goes to host for approval)
   const joinRoom = useCallback((roomCode: string, playerName: string) => {
-    // Simulate joining - in real implementation, this would connect via Socket.io
-    const playerId = Math.random().toString(36).substr(2, 9);
-    
-    const player: Player = {
-      id: playerId,
-      name: playerName,
-      ticket: generateTambolaTicket(),
-      markedNumbers: new Set(),
-      completedRows: [false, false, false],
-      hasFirstRow: false,
-      hasSecondRow: false,
-      hasThirdRow: false,
-      hasFullHouse: false,
-      score: 0
-    };
-
-    // For demo purposes, create a mock room
-    const room: GameRoom = {
-      id: Math.random().toString(36).substr(2, 9),
-      code: roomCode,
-      hostId: 'mock-host',
-      players: [player],
-      currentNumber: null,
-      calledNumbers: [],
-      gameStarted: false,
-      gameEnded: false,
-      winners: {}
-    };
-
-    setGameState({
-      currentRoom: room,
-      currentPlayer: player,
-      isHost: false
-    });
-
-    return room;
+    setLastError(null);
+    socket.emit('request-join', roomCode.toUpperCase(), playerName);
   }, []);
 
+  // Host actions
   const startGame = useCallback(() => {
     if (!gameState.currentRoom) return;
-
-    setGameState(prev => ({
-      ...prev,
-      currentRoom: prev.currentRoom ? {
-        ...prev.currentRoom,
-        gameStarted: true
-      } : null
-    }));
+    socket.emit('start-game', gameState.currentRoom.code);
   }, [gameState.currentRoom]);
 
   const callNumber = useCallback(() => {
-    if (!gameState.currentRoom || !gameState.isHost) return null;
-
-    const availableNumbers = Array.from({length: 90}, (_, i) => i + 1)
-      .filter(num => !gameState.currentRoom!.calledNumbers.includes(num));
-
-    if (availableNumbers.length === 0) return null;
-
-    const randomIndex = Math.floor(Math.random() * availableNumbers.length);
-    const calledNumber = availableNumbers[randomIndex];
-
-    setGameState(prev => ({
-      ...prev,
-      currentRoom: prev.currentRoom ? {
-        ...prev.currentRoom,
-        currentNumber: calledNumber,
-        calledNumbers: [...prev.currentRoom.calledNumbers, calledNumber]
-      } : null
-    }));
-
-    return calledNumber;
-  }, [gameState.currentRoom, gameState.isHost]);
+    if (!gameState.currentRoom) return;
+    socket.emit('call-number', gameState.currentRoom.code);
+  }, [gameState.currentRoom]);
 
   const markNumber = useCallback((number: number) => {
-    if (!gameState.currentRoom || !gameState.currentPlayer) return;
-
-    const updatedMarkedNumbers = new Set(gameState.currentPlayer.markedNumbers);
-    if (gameState.currentRoom.calledNumbers.includes(number)) {
-      updatedMarkedNumbers.add(number);
-    }
-
-    const completedRows = checkRowCompletion(gameState.currentPlayer.ticket, updatedMarkedNumbers);
-    const isFullHouse = checkFullHouse(gameState.currentPlayer.ticket, updatedMarkedNumbers);
-
-    const updatedPlayer: Player = {
-      ...gameState.currentPlayer,
-      markedNumbers: updatedMarkedNumbers,
-      completedRows,
-      hasFirstRow: completedRows[0],
-      hasSecondRow: completedRows[1],
-      hasThirdRow: completedRows[2],
-      hasFullHouse: isFullHouse
-    };
-
-    setGameState(prev => ({
-      ...prev,
-      currentPlayer: updatedPlayer,
-      currentRoom: prev.currentRoom ? {
-        ...prev.currentRoom,
-        players: prev.currentRoom.players.map(p => 
-          p.id === updatedPlayer.id ? updatedPlayer : p
-        )
-      } : null
-    }));
-  }, [gameState.currentRoom, gameState.currentPlayer]);
+    if (!gameState.currentRoom) return;
+    socket.emit('mark-number', gameState.currentRoom.code, number);
+  }, [gameState.currentRoom]);
 
   const leaveRoom = useCallback(() => {
-    setGameState({
-      currentRoom: null,
-      currentPlayer: null,
-      isHost: false
+    if (!gameState.currentRoom) return;
+    socket.emit('leave-room', gameState.currentRoom.code);
+    setGameState({ currentRoom: null, currentPlayer: null, isHost: false });
+    setPendingJoinRequests([]);
+  }, [gameState.currentRoom]);
+
+  // Host approves or rejects a join request
+  const approveJoin = useCallback((requesterId: string, approved: boolean) => {
+    socket.emit('approve-join', { requesterId, approved });
+    setPendingJoinRequests(prev => prev.filter(r => r.requesterId !== requesterId));
+  }, []);
+
+  useEffect(() => {
+    // ----- Handlers -----
+    const handleRoomUpdate = (room: GameRoom) => {
+      const me = room.players?.find(p => p.id === socket.id) || null;
+      setGameState({
+        currentRoom: room,
+        currentPlayer: me,
+        isHost: room.hostId === socket.id
+      });
+    };
+
+    const handleRoomCreated = (room: GameRoom) => {
+      const me = room.players?.find(p => p.id === socket.id) || null;
+      setGameState({
+        currentRoom: room,
+        currentPlayer: me,
+        isHost: room.hostId === socket.id
+      });
+    };
+
+    const handleJoinApproved = (room: GameRoom) => {
+      const me = room.players?.find(p => p.id === socket.id) || null;
+      setGameState({
+        currentRoom: room,
+        currentPlayer: me,
+        isHost: room.hostId === socket.id
+      });
+    };
+
+    const handleJoinDenied = (msg: string) => {
+      setLastError(msg || 'Join request denied by host');
+    };
+
+    const handleJoinRequest = (payload: JoinRequest) => {
+      setPendingJoinRequests(prev => {
+        if (prev.some(r => r.requesterId === payload.requesterId)) return prev;
+        return [...prev, payload];
+      });
+    };
+
+    const handleRoomPlayers = (players: Player[]) => {
+      setGameState(prev => {
+        const code = prev.currentRoom?.code ?? '';
+        const id = prev.currentRoom?.id ?? '';
+        const room: GameRoom = {
+          id,
+          code,
+          hostId: players[0]?.id ?? '',
+          players,
+          currentNumber: prev.currentRoom?.currentNumber ?? null,
+          calledNumbers: prev.currentRoom?.calledNumbers ?? [],
+          gameStarted: prev.currentRoom?.gameStarted ?? false,
+          gameEnded: prev.currentRoom?.gameEnded ?? false,
+          winners: prev.currentRoom?.winners ?? {}
+        };
+        const me = players.find(p => p.id === socket.id) || null;
+        return {
+          currentRoom: room,
+          currentPlayer: me,
+          isHost: room.hostId === socket.id
+        };
+      });
+    };
+
+    const handleHostPerm = () => {
+      setGameState(gs => ({ ...gs, isHost: true }));
+    };
+
+    const handleError = (msg: string) => {
+      setLastError(msg || 'Server error');
+    };
+
+    // ----- Register listeners -----
+    socket.on('room-update', handleRoomUpdate);
+    socket.on('room-created', handleRoomCreated);
+    socket.on('join-approved', handleJoinApproved);
+    socket.on('join-denied', handleJoinDenied);
+    socket.on('join-request', handleJoinRequest); // host only
+    socket.on('request-pending', (payload) => {
+      // optional UI feedback for requester
+      console.log('join request pending', payload);
     });
+    socket.on('room-players', handleRoomPlayers);
+    socket.on('host-permission', handleHostPerm);
+    socket.on('error-message', handleError);
+
+    // cleanup
+    return () => {
+      socket.off('room-update', handleRoomUpdate);
+      socket.off('room-created', handleRoomCreated);
+      socket.off('join-approved', handleJoinApproved);
+      socket.off('join-denied', handleJoinDenied);
+      socket.off('join-request', handleJoinRequest);
+      socket.off('request-pending');
+      socket.off('room-players', handleRoomPlayers);
+      socket.off('host-permission', handleHostPerm);
+      socket.off('error-message', handleError);
+    };
   }, []);
 
   return {
@@ -169,6 +163,9 @@ export function useGameState() {
     startGame,
     callNumber,
     markNumber,
-    leaveRoom
+    leaveRoom,
+    pendingJoinRequests,
+    approveJoin,
+    lastError
   };
 }
