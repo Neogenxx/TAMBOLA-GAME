@@ -4,19 +4,24 @@ import { Trophy, Crown, Star, Award } from 'lucide-react';
 import { Player } from '../types/game';
 
 interface ScoreboardProps {
-  players: Player[];
-  currentPlayer: Player;
+  players?: Player[]; // made optional for safety
+  currentPlayer?: Player;
 }
 
-export function Scoreboard({ players, currentPlayer }: ScoreboardProps) {
+export function Scoreboard({ players = [], currentPlayer }: ScoreboardProps) {
   const getPlayerStatus = (player: Player) => {
+    if (!player) return { text: '', color: '', icon: null };
+
     if (player.hasFullHouse) return { text: 'Full House!', color: 'text-purple-600', icon: Crown };
     if (player.hasThirdRow) return { text: 'Third Row', color: 'text-green-600', icon: Trophy };
     if (player.hasSecondRow) return { text: 'Second Row', color: 'text-blue-600', icon: Award };
     if (player.hasFirstRow) return { text: 'First Row', color: 'text-orange-600', icon: Star };
     
-    const completedCount = player.completedRows.filter(Boolean).length;
-    const markedCount = player.markedNumbers.size;
+    const completedCount = Array.isArray(player.completedRows)
+      ? player.completedRows.filter(Boolean).length
+      : 0;
+
+    const markedCount = player?.markedNumbers?.size || 0;
     return { 
       text: `${markedCount} numbers marked`, 
       color: 'text-gray-600',
@@ -25,18 +30,29 @@ export function Scoreboard({ players, currentPlayer }: ScoreboardProps) {
   };
 
   const getProgressPercentage = (player: Player) => {
-    const totalNumbers = player.ticket.grid.flat().filter(cell => cell !== null).length;
-    return (player.markedNumbers.size / totalNumbers) * 100;
+    if (!player?.ticket?.grid) return 0;
+
+    const totalNumbers = player.ticket.grid
+      .flat()
+      .filter((cell: any) => cell !== null).length;
+
+    const markedCount = player?.markedNumbers?.size || 0;
+    return totalNumbers > 0 ? (markedCount / totalNumbers) * 100 : 0;
   };
 
-  const sortedPlayers = [...players].sort((a, b) => {
-    // Sort by achievement level, then by numbers marked
-    const aLevel = (a.hasFullHouse ? 4 : 0) + a.completedRows.filter(Boolean).length;
-    const bLevel = (b.hasFullHouse ? 4 : 0) + b.completedRows.filter(Boolean).length;
-    
-    if (aLevel !== bLevel) return bLevel - aLevel;
-    return b.markedNumbers.size - a.markedNumbers.size;
-  });
+  const sortedPlayers = Array.isArray(players)
+    ? [...players].sort((a, b) => {
+        const aLevel =
+          (a.hasFullHouse ? 4 : 0) +
+          (Array.isArray(a.completedRows) ? a.completedRows.filter(Boolean).length : 0);
+        const bLevel =
+          (b.hasFullHouse ? 4 : 0) +
+          (Array.isArray(b.completedRows) ? b.completedRows.filter(Boolean).length : 0);
+
+        if (aLevel !== bLevel) return bLevel - aLevel;
+        return (b?.markedNumbers?.size || 0) - (a?.markedNumbers?.size || 0);
+      })
+    : [];
 
   return (
     <div className="bg-white rounded-xl shadow-lg p-6">
@@ -53,9 +69,11 @@ export function Scoreboard({ players, currentPlayer }: ScoreboardProps) {
       <div className="space-y-4">
         <AnimatePresence>
           {sortedPlayers.map((player, index) => {
+            if (!player) return null;
+
             const status = getPlayerStatus(player);
             const progress = getProgressPercentage(player);
-            const isCurrentPlayer = player.id === currentPlayer.id;
+            const isCurrentPlayer = currentPlayer && player.id === currentPlayer.id;
             const StatusIcon = status.icon;
 
             return (
@@ -75,7 +93,7 @@ export function Scoreboard({ players, currentPlayer }: ScoreboardProps) {
                 `}
               >
                 {/* Winner Badge */}
-                {index === 0 && (player.hasFullHouse || player.completedRows.some(Boolean)) && (
+                {index === 0 && (player.hasFullHouse || (Array.isArray(player.completedRows) && player.completedRows.some(Boolean))) && (
                   <motion.div
                     initial={{ scale: 0, rotate: -180 }}
                     animate={{ scale: 1, rotate: 0 }}
@@ -116,7 +134,7 @@ export function Scoreboard({ players, currentPlayer }: ScoreboardProps) {
                   
                   <div className="text-right">
                     <div className="text-lg font-bold text-gray-800">
-                      {player.markedNumbers.size}
+                      {player?.markedNumbers?.size || 0}
                     </div>
                     <div className="text-xs text-gray-500">numbers</div>
                   </div>
@@ -142,7 +160,7 @@ export function Scoreboard({ players, currentPlayer }: ScoreboardProps) {
 
                 {/* Achievement Badges */}
                 <div className="flex space-x-1 mt-2">
-                  {player.completedRows.map((completed, rowIndex) => (
+                  {Array.isArray(player.completedRows) && player.completedRows.map((completed, rowIndex) => (
                     <motion.div
                       key={rowIndex}
                       className={`

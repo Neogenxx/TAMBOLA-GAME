@@ -76,8 +76,8 @@ export function GamePlay({
       setShowConfetti(true);
       setCelebrationMessage('🎉 Full House! 🎉');
       setTimeout(() => setShowConfetti(false), 5000);
-    } else if (currentPlayer.completedRows.some(Boolean) && !showConfetti) {
-      const completedRowIndex = currentPlayer.completedRows.findIndex(Boolean);
+    } else if ((currentPlayer.completedRows ?? []).some(Boolean) && !showConfetti) {
+      const completedRowIndex = (currentPlayer.completedRows ?? []).findIndex(Boolean);
       if (completedRowIndex !== -1) {
         setShowConfetti(true);
         setCelebrationMessage(`🎊 Row ${completedRowIndex + 1} Complete! 🎊`);
@@ -199,7 +199,7 @@ export function GamePlay({
                   </div>
                   <div>
                     <div className="text-2xl font-bold text-white">
-                      {currentPlayer.completedRows.filter(Boolean).length}
+                      {(currentPlayer.completedRows ?? []).filter(Boolean).length}
                     </div>
                     <div className="text-purple-200 text-sm">Rows Complete</div>
                   </div>

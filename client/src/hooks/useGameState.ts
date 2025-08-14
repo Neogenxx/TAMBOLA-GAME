@@ -15,19 +15,18 @@ export function useGameState() {
   const [pendingJoinRequests, setPendingJoinRequests] = useState<JoinRequest[]>([]);
   const [lastError, setLastError] = useState<string | null>(null);
 
-  // Host creates room
   const createRoom = useCallback((hostName: string) => {
     setLastError(null);
+    console.log('HOOK: createRoom', hostName);
     socket.emit('create-room', hostName);
   }, []);
 
-  // Player requests to join (goes to host for approval)
   const joinRoom = useCallback((roomCode: string, playerName: string) => {
     setLastError(null);
+    console.log('HOOK: request-join', roomCode, playerName, socket.id);
     socket.emit('request-join', roomCode.toUpperCase(), playerName);
   }, []);
 
-  // Host actions
   const startGame = useCallback(() => {
     if (!gameState.currentRoom) return;
     socket.emit('start-game', gameState.currentRoom.code);
@@ -50,107 +49,71 @@ export function useGameState() {
     setPendingJoinRequests([]);
   }, [gameState.currentRoom]);
 
-  // Host approves or rejects a join request
   const approveJoin = useCallback((requesterId: string, approved: boolean) => {
+    console.log('HOOK: approveJoin', requesterId, approved);
     socket.emit('approve-join', { requesterId, approved });
-    setPendingJoinRequests(prev => prev.filter(r => r.requesterId !== requesterId));
+    setPendingJoinRequests(prev => prev.filter(p => p.requesterId !== requesterId));
   }, []);
 
   useEffect(() => {
-    // ----- Handlers -----
     const handleRoomUpdate = (room: GameRoom) => {
+      console.log('CLIENT: room-update', room);
       const me = room.players?.find(p => p.id === socket.id) || null;
-      setGameState({
-        currentRoom: room,
-        currentPlayer: me,
-        isHost: room.hostId === socket.id
-      });
+      setGameState({ currentRoom: room, currentPlayer: me, isHost: room.hostId === socket.id });
     };
 
     const handleRoomCreated = (room: GameRoom) => {
+      console.log('CLIENT: room-created', room);
       const me = room.players?.find(p => p.id === socket.id) || null;
-      setGameState({
-        currentRoom: room,
-        currentPlayer: me,
-        isHost: room.hostId === socket.id
-      });
+      setGameState({ currentRoom: room, currentPlayer: me, isHost: room.hostId === socket.id });
     };
 
     const handleJoinApproved = (room: GameRoom) => {
+      console.log('CLIENT: join-approved', room);
       const me = room.players?.find(p => p.id === socket.id) || null;
-      setGameState({
-        currentRoom: room,
-        currentPlayer: me,
-        isHost: room.hostId === socket.id
-      });
+      setGameState({ currentRoom: room, currentPlayer: me, isHost: room.hostId === socket.id });
     };
 
     const handleJoinDenied = (msg: string) => {
-      setLastError(msg || 'Join request denied by host');
+      console.log('CLIENT: join-denied', msg);
+      setLastError(msg || 'Join denied');
     };
 
     const handleJoinRequest = (payload: JoinRequest) => {
-      setPendingJoinRequests(prev => {
-        if (prev.some(r => r.requesterId === payload.requesterId)) return prev;
-        return [...prev, payload];
-      });
+      console.log('CLIENT: join-request', payload);
+      setPendingJoinRequests(prev => prev.some(p => p.requesterId === payload.requesterId) ? prev : [...prev, payload]);
     };
 
-    const handleRoomPlayers = (players: Player[]) => {
-      setGameState(prev => {
-        const code = prev.currentRoom?.code ?? '';
-        const id = prev.currentRoom?.id ?? '';
-        const room: GameRoom = {
-          id,
-          code,
-          hostId: players[0]?.id ?? '',
-          players,
-          currentNumber: prev.currentRoom?.currentNumber ?? null,
-          calledNumbers: prev.currentRoom?.calledNumbers ?? [],
-          gameStarted: prev.currentRoom?.gameStarted ?? false,
-          gameEnded: prev.currentRoom?.gameEnded ?? false,
-          winners: prev.currentRoom?.winners ?? {}
-        };
-        const me = players.find(p => p.id === socket.id) || null;
-        return {
-          currentRoom: room,
-          currentPlayer: me,
-          isHost: room.hostId === socket.id
-        };
-      });
+    const handleRequestPending = (payload: any) => {
+      console.log('CLIENT: request-pending', payload);
     };
 
     const handleHostPerm = () => {
+      console.log('CLIENT: host-permission');
       setGameState(gs => ({ ...gs, isHost: true }));
     };
 
     const handleError = (msg: string) => {
+      console.log('CLIENT: error-message', msg);
       setLastError(msg || 'Server error');
     };
 
-    // ----- Register listeners -----
     socket.on('room-update', handleRoomUpdate);
     socket.on('room-created', handleRoomCreated);
     socket.on('join-approved', handleJoinApproved);
     socket.on('join-denied', handleJoinDenied);
-    socket.on('join-request', handleJoinRequest); // host only
-    socket.on('request-pending', (payload) => {
-      // optional UI feedback for requester
-      console.log('join request pending', payload);
-    });
-    socket.on('room-players', handleRoomPlayers);
+    socket.on('join-request', handleJoinRequest);
+    socket.on('request-pending', handleRequestPending);
     socket.on('host-permission', handleHostPerm);
     socket.on('error-message', handleError);
 
-    // cleanup
     return () => {
       socket.off('room-update', handleRoomUpdate);
       socket.off('room-created', handleRoomCreated);
       socket.off('join-approved', handleJoinApproved);
       socket.off('join-denied', handleJoinDenied);
       socket.off('join-request', handleJoinRequest);
-      socket.off('request-pending');
-      socket.off('room-players', handleRoomPlayers);
+      socket.off('request-pending', handleRequestPending);
       socket.off('host-permission', handleHostPerm);
       socket.off('error-message', handleError);
     };
