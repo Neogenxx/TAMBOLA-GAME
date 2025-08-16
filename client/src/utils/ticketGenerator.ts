@@ -1,109 +1,68 @@
-import { TambolaTicket } from '../types/game';
+// client/src/utils/ticketGenerator.ts
+// Produces the same 3x9 tambola ticket that the server generates (0 = blank)
+export function generateTambolaTicket(): number[][] {
+  const colRanges = Array.from({length:9}, (_,i) => {
+    const start = i*10 + 1;
+    const end = i === 8 ? 90 : i*10 + 10;
+    const arr = [];
+    for (let n = start; n <= end; n++) arr.push(n);
+    return arr;
+  });
 
-export function generateTambolaTicket(): TambolaTicket {
-  // Initialize 9x3 grid with nulls
-  const grid: (number | null)[][] = Array(3).fill(null).map(() => Array(9).fill(null));
-  
-  // Column ranges for Tambola
-  const columnRanges = [
-    [1, 9],    // Column 0: 1-9
-    [10, 19],  // Column 1: 10-19
-    [20, 29],  // Column 2: 20-29
-    [30, 39],  // Column 3: 30-39
-    [40, 49],  // Column 4: 40-49
-    [50, 59],  // Column 5: 50-59
-    [60, 69],  // Column 6: 60-69
-    [70, 79],  // Column 7: 70-79
-    [80, 90]   // Column 8: 80-90
-  ];
-
-  // For each row, select 5 columns randomly
-  for (let row = 0; row < 3; row++) {
-    const selectedColumns = getRandomColumns(9, 5);
-    
-    for (const col of selectedColumns) {
-      const [min, max] = columnRanges[col];
-      let number;
-      do {
-        number = Math.floor(Math.random() * (max - min + 1)) + min;
-      } while (isNumberAlreadyUsed(grid, number));
-      
-      grid[row][col] = number;
-    }
+  const colCounts = Array(9).fill(0);
+  let remaining = 15;
+  const colsIdx = [...Array(9).keys()];
+  while (remaining > 0) {
+    const availableCols = colsIdx.filter(i => colCounts[i] < 3);
+    const idx = availableCols[Math.floor(Math.random() * availableCols.length)];
+    colCounts[idx]++;
+    remaining--;
   }
 
-  // Sort numbers in each column
-  for (let col = 0; col < 9; col++) {
-    const columnNumbers: number[] = [];
-    for (let row = 0; row < 3; row++) {
-      if (grid[row][col] !== null) {
-        columnNumbers.push(grid[row][col] as number);
+  const colNumbers = colCounts.map((count, col) => {
+    if (count === 0) return [];
+    const pool = [...colRanges[col]];
+    const chosen = [];
+    for (let k = 0; k < count; k++) {
+      const i = Math.floor(Math.random() * pool.length);
+      chosen.push(pool.splice(i, 1)[0]);
+    }
+    chosen.sort((a,b) => a-b);
+    return chosen;
+  });
+
+  const rows = [Array(9).fill(0), Array(9).fill(0), Array(9).fill(0)];
+  const rowCounts = [0,0,0];
+  const colOrder = [...Array(9).keys()].sort(() => Math.random() - 0.5);
+
+  for (const c of colOrder) {
+    const nums = colNumbers[c];
+    if (!nums || nums.length === 0) continue;
+    const rowOrder = [0,1,2].sort((a,b) => rowCounts[a] - rowCounts[b]);
+    for (let i = 0; i < nums.length; i++) {
+      let placed = false;
+      for (const r of rowOrder) {
+        if (rowCounts[r] < 5 && rows[r][c] === 0) {
+          rows[r][c] = nums[i];
+          rowCounts[r]++;
+          placed = true;
+          break;
+        }
       }
-    }
-    columnNumbers.sort((a, b) => a - b);
-    
-    let numberIndex = 0;
-    for (let row = 0; row < 3; row++) {
-      if (grid[row][col] !== null) {
-        grid[row][col] = columnNumbers[numberIndex++];
-      }
-    }
-  }
-
-  return {
-    id: Math.random().toString(36).substr(2, 9),
-    grid
-  };
-}
-
-function getRandomColumns(total: number, count: number): number[] {
-  const columns: number[] = [];
-  while (columns.length < count) {
-    const col = Math.floor(Math.random() * total);
-    if (!columns.includes(col)) {
-      columns.push(col);
-    }
-  }
-  return columns.sort((a, b) => a - b);
-}
-
-function isNumberAlreadyUsed(grid: (number | null)[][], number: number): boolean {
-  for (let row = 0; row < 3; row++) {
-    for (let col = 0; col < 9; col++) {
-      if (grid[row][col] === number) {
-        return true;
+      if (!placed) {
+        const fallback = rowCounts.findIndex(rc => rc < 5);
+        if (fallback !== -1) {
+          rows[fallback][c] = nums[i];
+          rowCounts[fallback]++;
+        } else {
+          return generateTambolaTicket();
+        }
       }
     }
   }
-  return false;
-}
 
-export function checkRowCompletion(ticket: TambolaTicket, markedNumbers: Set<number>): boolean[] {
-  const completedRows: boolean[] = [];
-  
-  for (let row = 0; row < 3; row++) {
-    let rowComplete = true;
-    for (let col = 0; col < 9; col++) {
-      const number = ticket.grid[row][col];
-      if (number !== null && !markedNumbers.has(number)) {
-        rowComplete = false;
-        break;
-      }
-    }
-    completedRows.push(rowComplete);
+  if (rowCounts.some(rc => rc !== 5)) {
+    return generateTambolaTicket();
   }
-  
-  return completedRows;
-}
-
-export function checkFullHouse(ticket: TambolaTicket, markedNumbers: Set<number>): boolean {
-  for (let row = 0; row < 3; row++) {
-    for (let col = 0; col < 9; col++) {
-      const number = ticket.grid[row][col];
-      if (number !== null && !markedNumbers.has(number)) {
-        return false;
-      }
-    }
-  }
-  return true;
+  return rows;
 }
